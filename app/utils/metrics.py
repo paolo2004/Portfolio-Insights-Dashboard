@@ -6,12 +6,12 @@ from utils.analysis import load_ticker_info
 
 
 def get_trades_transactions(df):
-    buy_transactions = df[df["type"].isin(["BUY", "SELL"])].copy()
-    if buy_transactions.empty:
+    trades_transactions = df[df["type"].isin(["BUY", "SELL"])].copy()
+    if trades_transactions.empty:
         st.info("No buy transactions found. Allocation cannot be calculated.")
         st.stop()
     else:
-        return buy_transactions
+        return trades_transactions
 
 
 @st.cache_data(ttl=900, show_spinner=False)

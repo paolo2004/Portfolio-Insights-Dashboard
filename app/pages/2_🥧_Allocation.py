@@ -100,8 +100,6 @@ with col1:
 with col2:
     with st.container(border=True):
         st.markdown("### Allocation by asset class")
-        st.caption("A coarse split, so a donut still reads at a glance.")
-
         asset_class = invested_assets.groupby("asset_class", as_index=False)["total_invested"].sum()
         figure = px.pie(asset_class, names="asset_class", values="total_invested", hole=0.68)
         figure.update_traces(marker=dict(line=dict(color="#10151d", width=2)))
@@ -112,7 +110,6 @@ col1, col2 = st.columns(2)
 with col1:
     with st.container(border=True):
         st.markdown("### Stock allocation")
-        st.caption("Invested capital across your equity positions.")
 
         stock_allocation = invested_assets[invested_assets["asset_class"] == "STOCK"]
         if stock_allocation.empty:
@@ -123,7 +120,6 @@ with col1:
 with col2:
     with st.container(border=True):
         st.markdown("### Crypto allocation")
-        st.caption("Invested capital across your crypto positions.")
 
         crypto_allocation = invested_assets[invested_assets["asset_class"] == "CRYPTO"]
         if crypto_allocation.empty:
@@ -136,7 +132,6 @@ columns = st.columns(2)
 with columns[0]:
     with st.container(border=True):
         st.markdown("### Allocation by country")
-        st.caption("Where your invested capital is domiciled.")
 
         country_figure = px.pie(
             country_allocation,
@@ -152,18 +147,13 @@ with columns[0]:
 with columns[1]:
     with st.container(border=True):
         st.markdown("### Allocation by sector")
-        st.caption("Sectors ranked by invested capital.")
         allocation_bar(sector_allocation, "amount", "sector", "Invested (€)", "sectors")
 
 col1, col2 = st.columns(2)
 with col1:
     with st.container(border=True):
         st.markdown("### Allocation by asset")
-        st.caption(
-            "Net invested capital per asset, largest first. "
-            "Negative means sales returned more than was invested."
-        )
-
+        
         display_columns = [
             "name",
             "total_invested",
@@ -213,5 +203,5 @@ with col2:
         figure.update_traces(line_width=2)
         show_chart(figure, height=400)
 
-with st.expander("Show raw data"):
+with st.expander("Show All Transactions"):
     st.dataframe(df, width="stretch", hide_index=True)

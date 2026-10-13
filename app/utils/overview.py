@@ -74,12 +74,11 @@ def invested_capital_timeline(trades, end_date=None):
 
 def holdings_timeline(trades, days):
     """Shares held per ticker at the end of each day in `days`."""
-    priced = trades.dropna(subset=["ticker"])
-    if priced.empty:
+    if trades.empty:
         return pd.DataFrame(index=days)
 
-    signed_shares = priced["shares"].abs().where(priced["type"] == "BUY", -priced["shares"].abs())
-    daily = signed_shares.groupby([priced["date"].dt.normalize(), priced["ticker"]]).sum()
+    signed_shares = trades["shares"].abs().where(trades["type"] == "BUY", -trades["shares"].abs())
+    daily = signed_shares.groupby([trades["date"].dt.normalize(), trades["ticker"]]).sum()
     holdings = daily.unstack(fill_value=0).reindex(days, fill_value=0).cumsum()
     # Selling more than the export shows as bought must not create short positions.
     return holdings.clip(lower=0)
@@ -91,6 +90,7 @@ def market_value_timeline(holdings, prices):
     A partial line would sit below the invested line and look like a loss, so
     the chart shows no market value at all rather than an incomplete one.
     """
+
     if holdings.empty or holdings.shape[1] == 0:
         return None
 
