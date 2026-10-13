@@ -153,7 +153,6 @@ col1, col2 = st.columns(2)
 with col1:
     with st.container(border=True):
         st.markdown("### Allocation by asset")
-        
         display_columns = [
             "name",
             "total_invested",
