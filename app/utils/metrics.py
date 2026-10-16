@@ -1,3 +1,5 @@
+from collections import deque
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -73,67 +75,181 @@ def get_current_prices(tickers):
     return prices
 
 
+ASSET_COLUMNS = ["name", "symbol", "asset_class", "ticker"]
+REALISED_COLUMNS = [
+    *ASSET_COLUMNS,
+    "sell_date",
+    "shares",
+    "unmatched_shares",
+    "first_buy_date",
+    "last_buy_date",
+    "buy_price",
+    "sell_price",
+    "cost_basis",
+    "gross_proceeds",
+    "fee",
+    "tax",
+    "profit_loss",
+    "profit_loss_after_tax",
+    "return_pct",
+    "holding_days",
+]
+# Share counts below this are floating-point leftovers, not real holdings.
+EPSILON = 1e-10
+
+
+def _match_fifo(asset_trades):
+    """
+    Replay one asset's trades in date order, matching every sell against the
+    oldest buys still open (FIFO, as German tax law does for securities).
+
+    Returns the realised sales, one dict per sell, and the lots still open.
+    Each lot is a dict with the buy `date`, the `shares` left and their `cost`
+    (purchase amount + fees + taxes, reduced proportionally by earlier sells).
+    """
+    lots = deque()
+    sales = []
+
+    # A stable sort keeps the export's row order for trades on the same day.
+    for _, trade in asset_trades.sort_values("date", kind="stable").iterrows():
+        shares = abs(trade["shares"])
+        fee = abs(trade["fee"])
+        tax = abs(trade["tax"])
+
+        if trade["type"] == "BUY":
+            # `amount` is negative for buys in this export.
+            lots.append(
+                {"date": trade["date"], "shares": shares, "cost": abs(trade["amount"]) + fee + tax}
+            )
+            continue
+        if trade["type"] != "SELL":
+            continue
+
+        remaining = shares
+        cost_basis = 0.0
+        buy_dates = []
+        while remaining > EPSILON and lots:
+            lot = lots[0]
+            taken = min(remaining, lot["shares"])
+            taken_cost = lot["cost"] * taken / lot["shares"]
+
+            cost_basis += taken_cost
+            buy_dates.append(lot["date"])
+            lot["shares"] -= taken
+            lot["cost"] -= taken_cost
+            remaining -= taken
+            if lot["shares"] <= EPSILON:
+                lots.popleft()
+
+        matched = shares - remaining
+        # `amount` is positive for sells; fees and taxes are negative.
+        gross_proceeds = abs(trade["amount"])
+        if matched > EPSILON:
+            # A sale larger than the holdings in the export keeps its full
+            # proceeds but only the matched shares' cost; `unmatched_shares`
+            # lets the page flag it.
+            profit_loss = gross_proceeds - fee - cost_basis
+            profit_loss_after_tax = profit_loss - tax
+            first_buy, last_buy = min(buy_dates), max(buy_dates)
+            sale = {
+                "first_buy_date": first_buy,
+                "last_buy_date": last_buy,
+                "buy_price": cost_basis / matched,
+                "cost_basis": cost_basis,
+                "profit_loss": profit_loss,
+                "profit_loss_after_tax": profit_loss_after_tax,
+                "return_pct": profit_loss_after_tax / cost_basis if cost_basis else np.nan,
+                "holding_days": (trade["date"] - first_buy).days,
+            }
+        else:
+            # Nothing bought in the export to match against: no P/L can be computed.
+            sale = dict.fromkeys(
+                [
+                    "first_buy_date",
+                    "last_buy_date",
+                    "buy_price",
+                    "cost_basis",
+                    "profit_loss",
+                    "profit_loss_after_tax",
+                    "return_pct",
+                    "holding_days",
+                ],
+                np.nan,
+            )
+
+        sales.append(
+            {
+                **sale,
+                "sell_date": trade["date"],
+                "shares": shares,
+                "unmatched_shares": remaining if remaining > EPSILON else 0.0,
+                "sell_price": gross_proceeds / shares if shares else np.nan,
+                "gross_proceeds": gross_proceeds,
+                "fee": fee,
+                "tax": tax,
+            }
+        )
+
+    return sales, lots
+
+
+def calculate_realised_trades(trades):
+    """
+    One row per sell with its FIFO-matched buys.
+
+    buy_price:  cost per share of the matched buys, including their fees and taxes
+    sell_price: gross sale price per share
+    profit_loss: gross proceeds - sell fee - cost basis (before tax)
+    profit_loss_after_tax: profit_loss - tax withheld on the sale
+    """
+    rows = []
+    for asset, asset_trades in trades.groupby(ASSET_COLUMNS, dropna=False):
+        sales, _ = _match_fifo(asset_trades)
+        identity = dict(zip(ASSET_COLUMNS, asset, strict=True))
+        rows.extend({**identity, **sale} for sale in sales)
+
+    realised = pd.DataFrame(rows, columns=REALISED_COLUMNS)
+    return realised.sort_values("sell_date", kind="stable", ignore_index=True)
+
+
 def calculate_positions(trades):
     """
-    Calculate current positions and realised P/L using average-cost accounting.
+    Calculate current positions and realised P/L using FIFO accounting.
 
     Buy:
-        adds shares and purchase cost (trade amount + fees + taxes)
+        opens a lot with its shares and purchase cost (trade amount + fees + taxes)
 
     Sell:
-        reduces open shares and removes the proportional average cost basis.
-        realised P/L = net sale proceeds - removed cost basis
+        consumes the oldest open lots first, removing their cost proportionally.
+        realised P/L = net sale proceeds (after fees and taxes) - removed cost basis
     """
     positions = []
 
-    group_columns = ["name", "symbol", "asset_class", "ticker"]
-
-    for asset, asset_trades in trades.groupby(group_columns, dropna=False):
+    for asset, asset_trades in trades.groupby(ASSET_COLUMNS, dropna=False):
         name, symbol, asset_class, ticker = asset
-        asset_trades = asset_trades.sort_values("date")
+        sales, lots = _match_fifo(asset_trades)
 
-        open_shares = 0.0
-        open_cost_basis = 0.0
-        realised_profit_loss = 0.0
-        total_purchase_cost = 0.0
-        total_sale_proceeds = 0.0
-
-        for _, trade in asset_trades.iterrows():
-            shares = abs(trade["shares"])
-            fees_and_taxes = abs(trade["fee"]) + abs(trade["tax"])
-
-            if trade["type"] == "BUY":
-                # `amount` is negative for buys in this export.
-                purchase_cost = abs(trade["amount"]) + fees_and_taxes
-
-                open_shares += shares
-                open_cost_basis += purchase_cost
-                total_purchase_cost += purchase_cost
-
-            elif trade["type"] == "SELL":
-                # `amount` is positive for sells; fees and taxes are negative.
-                net_sale_proceeds = abs(trade["amount"]) - fees_and_taxes
-                total_sale_proceeds += net_sale_proceeds
-
-                if open_shares <= 0:
-                    continue
-
-                # Protect against an export containing a sale larger than holdings.
-                shares_sold = min(shares, open_shares)
-
-                average_cost_before_sale = open_cost_basis / open_shares
-                removed_cost_basis = shares_sold * average_cost_before_sale
-
-                open_shares -= shares_sold
-                open_cost_basis -= removed_cost_basis
-                realised_profit_loss += net_sale_proceeds - removed_cost_basis
+        open_shares = sum(lot["shares"] for lot in lots)
+        open_cost_basis = sum(lot["cost"] for lot in lots)
 
         # Avoid tiny floating-point leftovers
-        if abs(open_shares) < 1e-10:
+        if abs(open_shares) < EPSILON:
             open_shares = 0.0
 
-        if abs(open_cost_basis) < 1e-10:
+        if abs(open_cost_basis) < EPSILON:
             open_cost_basis = 0.0
+
+        buys = asset_trades[asset_trades["type"] == "BUY"]
+        total_purchase_cost = (buys["amount"].abs() + buys["fee"].abs() + buys["tax"].abs()).sum()
+        total_sale_proceeds = sum(
+            sale["gross_proceeds"] - sale["fee"] - sale["tax"] for sale in sales
+        )
+        # Sells with nothing to match against have no P/L (NaN) and add nothing.
+        realised_profit_loss = sum(
+            sale["profit_loss_after_tax"]
+            for sale in sales
+            if pd.notna(sale["profit_loss_after_tax"])
+        )
 
         avg_cost_per_share = open_cost_basis / open_shares if open_shares > 0 else np.nan
         positions.append(
@@ -145,9 +261,9 @@ def calculate_positions(trades):
                 "open_shares": open_shares,
                 "open_cost_basis": open_cost_basis,
                 "avg_cost_per_share": avg_cost_per_share,
-                "total_purchase_cost": total_purchase_cost,
-                "total_sale_proceeds": total_sale_proceeds,
-                "realised_profit_loss": realised_profit_loss,
+                "total_purchase_cost": float(total_purchase_cost),
+                "total_sale_proceeds": float(total_sale_proceeds),
+                "realised_profit_loss": float(realised_profit_loss),
             }
         )
 

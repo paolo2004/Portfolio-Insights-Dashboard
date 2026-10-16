@@ -5,7 +5,11 @@ import plotly.graph_objects as go
 import streamlit as st
 from utils.data_source import import_dialog
 from utils.import_data import check_if_data_loaded, validate_data
-from utils.metrics import calculate_positions, get_trades_transactions
+from utils.metrics import (
+    calculate_positions,
+    calculate_realised_trades,
+    get_trades_transactions,
+)
 from utils.overview import (
     activity_label,
     allocation_by_class,
@@ -124,7 +128,6 @@ open_positions["value"] = (open_positions["open_shares"] * open_positions["price
 )
 unpriced_positions = int(open_positions["price"].isna().sum())
 
-in_period = df.loc[df["date"] >= start]
 dividends = df.loc[df["type"] == "DIVIDEND"]
 period_dividends = net_cash_flow(dividends.loc[dividends["date"] >= start]).sum()
 trailing_dividends = net_cash_flow(
@@ -135,7 +138,9 @@ cash = cash_balance(df)
 holdings_value = open_positions["value"].sum()
 portfolio_value = holdings_value + max(cash, 0)
 unrealised = holdings_value - cost_basis
-months_in_period = max((latest_date - start).days / 30.44, 1)
+realised = calculate_realised_trades(trades)
+realised = realised.loc[realised["sell_date"] >= start].dropna(subset=["profit_loss"])
+period_realised = realised["profit_loss_after_tax"].sum()
 asset_classes = open_positions["asset_class"].nunique()
 
 # ---------------------------------------------------------------- KPIs
@@ -156,6 +161,12 @@ else:
     if unpriced_positions:
         value_context += f" · {unpriced_positions} at cost"
 
+if realised.empty:
+    realised_context, realised_tone = "No sells in this period", ""
+else:
+    realised_context = f"After tax · {len(realised)} sell{'s' if len(realised) != 1 else ''}"
+    realised_tone = "positive" if period_realised >= 0 else "negative"
+
 if cash >= 0:
     cash_context, cash_tone = f"Uninvested on {latest_date:%d %b %Y}", ""
 else:
@@ -173,9 +184,10 @@ st.markdown(
         f"Across {asset_classes} asset class{'es' if asset_classes != 1 else ''}",
     )
     + kpi_card(
-        "Transactions",
-        f"{len(in_period):,}",
-        f"≈ {len(in_period) / months_in_period:.0f} per month",
+        "Realised P/L",
+        eur(period_realised, signed=True),
+        realised_context,
+        realised_tone,
     )
     + "</div>",
     unsafe_allow_html=True,

@@ -23,6 +23,12 @@ PAGES = [
         url_path="transactions",
     ),
     st.Page(
+        "pages/7_💰_Realised_Gains.py",
+        title="Realised gains",
+        icon=":material/trending_up:",
+        url_path="realised-gains",
+    ),
+    st.Page(
         "pages/5_💳_Expenses.py",
         title="Expenses",
         icon=":material/credit_card:",
