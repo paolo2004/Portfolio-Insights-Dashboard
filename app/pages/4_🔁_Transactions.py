@@ -116,7 +116,16 @@ TYPE_GROUPS = {
     "CUSTOMER_INPAYMENT_REVERSAL": "Other",
     "TAX_OPTIMIZATION": "Other",
 }
-GROUP_ORDER = ["Buy", "Sell", "Dividend", "Interest", "Deposit", "Withdrawal", "Card payment", "Other"]
+GROUP_ORDER = [
+    "Buy",
+    "Sell",
+    "Dividend",
+    "Interest",
+    "Deposit",
+    "Withdrawal",
+    "Card payment",
+    "Other",
+]
 GROUP_COLORS = {g: CATEGORICAL[i % len(CATEGORICAL)] for i, g in enumerate(GROUP_ORDER)}
 
 left_column, right_column = st.columns(2)
@@ -207,8 +216,8 @@ with breakdown_col1:
         )
         figure.update_traces(marker=dict(line=dict(color="#10151d", width=2)))
         figure.update_layout(
-                        legend=dict(orientation="h", yanchor="top", y=-0.12, x=0, title=None),
-                    )
+            legend=dict(orientation="h", yanchor="top", y=-0.12, x=0, title=None),
+        )
         show_chart(figure)
 
 with breakdown_col2:
