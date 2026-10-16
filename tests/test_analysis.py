@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 from conftest import StreamlitStop
 from utils.analysis import (
+    asset_class_from_info,
     calculate_price_metrics,
     format_date_value,
     format_large_number,
@@ -87,20 +88,20 @@ class TestFormatPercentage:
     def test_fractions_are_scaled_to_percent(self, value, expected):
         assert format_percentage(value) == expected
 
+    def test_fractions_above_one_are_still_scaled(self):
+        # 150% revenue growth arrives as 1.5 and must not read as 1.5%.
+        assert format_percentage(1.5) == "150.00%"
+
     @pytest.mark.parametrize(
         ("value", "expected"),
         [
+            (0.41, "0.41%"),
             (12.34, "12.34%"),
             (-250.0, "-250.00%"),
         ],
     )
-    def test_values_above_one_are_already_percentages(self, value, expected):
-        assert format_percentage(value) == expected
-
-    def test_one_is_treated_as_a_fraction(self):
-        # The |value| <= 1 heuristic cannot distinguish "1%" from "100%";
-        # it resolves the boundary in favour of the fraction reading.
-        assert format_percentage(1) == "100.00%"
+    def test_values_already_in_percent_are_not_scaled(self, value, expected):
+        assert format_percentage(value, is_decimal=False) == expected
 
     @pytest.mark.parametrize("value", [None, float("nan"), "abc"])
     def test_unusable_values_become_not_available(self, value):
@@ -152,6 +153,19 @@ class TestGetDisplayName:
 
     def test_missing_field_returns_none(self):
         assert get_display_name({}, "STOCK") is None
+
+    def test_missing_field_uses_the_fallback(self):
+        assert get_display_name({}, "STOCK", "Apple") == "Apple"
+        assert get_display_name({"name": None}, "CRYPTO", "Bitcoin") == "Bitcoin"
+
+
+class TestAssetClassFromInfo:
+    @pytest.mark.parametrize(
+        ("quote_type", "expected"),
+        [("CRYPTOCURRENCY", "CRYPTO"), ("ETF", "FUND"), ("EQUITY", "STOCK"), (None, "STOCK")],
+    )
+    def test_maps_the_yahoo_quote_type(self, quote_type, expected):
+        assert asset_class_from_info({"quoteType": quote_type}) == expected
 
 
 class TestGetAssetType:

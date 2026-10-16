@@ -117,6 +117,29 @@ class TestLoadDataNormalisation:
         assert frame.loc[0, "tax"] == 0
         assert pd.api.types.is_numeric_dtype(frame["amount"])
 
+    def test_unreadable_numbers_are_rejected_not_zeroed(self, no_isin_lookup):
+        row = CSV_ROW.replace(",-1000,", ',"-1.000,50",')
+        with pytest.raises(ValueError, match="'amount'"):
+            load_data(csv_upload(CSV_HEADER + row))
+
+    def test_utf8_names_are_decoded(self, no_isin_lookup):
+        text = CSV_HEADER + CSV_ROW.replace("Apple", "Caf\u00e9 M\u00fcller")
+        frame = load_data(FakeUpload(text.encode("utf-8"), "export.csv"))
+
+        assert frame.loc[0, "name"] == "Caf\u00e9 M\u00fcller"
+
+    def test_latin1_files_still_load(self, no_isin_lookup):
+        text = CSV_HEADER + CSV_ROW.replace("Apple", "Caf\u00e9")
+        frame = load_data(csv_upload(text))
+
+        assert frame.loc[0, "name"] == "Caf\u00e9"
+
+    def test_wrong_files_fail_before_any_ticker_lookup(self, no_isin_lookup):
+        with pytest.raises(ValueError, match="Missing required columns"):
+            load_data(csv_upload("symbol,foo\nUS0378331005,1\n"))
+
+        assert no_isin_lookup == []
+
     @pytest.mark.parametrize(
         "column", ["counterparty_iban", "payment_reference", "account_type", "mcc_code"]
     )
@@ -165,6 +188,27 @@ class TestLoadDataTickerResolution:
         assert no_isin_lookup == ["US0378331005"]
         assert frame["ticker"].tolist() == ["TICK:US0378331005"] * 2
 
+    def test_tickers_given_in_the_file_skip_the_lookup(self, no_isin_lookup):
+        text = CSV_HEADER.rstrip("\n") + ",ticker\n" + CSV_ROW.rstrip("\n") + ", aapl \n"
+        frame = load_data(csv_upload(text))
+
+        assert frame.loc[0, "ticker"] == "AAPL"
+        assert no_isin_lookup == []
+
+    def test_blank_tickers_in_the_file_are_still_resolved(self, no_isin_lookup):
+        crypto = CSV_ROW.replace("Apple,US0378331005,STOCK", "Bitcoin,BTC,CRYPTO")
+        text = (
+            CSV_HEADER.rstrip("\n")
+            + ",ticker\n"
+            + CSV_ROW.rstrip("\n")
+            + ",\n"
+            + crypto.rstrip("\n")
+            + ",\n"
+        )
+        frame = load_data(csv_upload(text))
+
+        assert frame["ticker"].tolist() == ["TICK:US0378331005", "BTC-USD"]
+
     def test_files_without_a_symbol_column_get_no_ticker(self, monkeypatch):
         def fail(isin):
             raise AssertionError("should not look up tickers without symbols")
@@ -174,7 +218,16 @@ class TestLoadDataTickerResolution:
         text += "2024-01-05,BUY,Apple,10,-1000,EUR\n"
         frame = load_data(csv_upload(text))
 
-        assert "ticker" not in frame.columns
+        assert frame["ticker"].isna().all()
+
+    def test_missing_optional_columns_get_defaults(self, no_isin_lookup):
+        text = "date,type,name,shares,amount,currency\n"
+        text += "2024-01-05,BUY,Apple,10,-1000,EUR\n"
+        frame = load_data(csv_upload(text))
+
+        assert frame.loc[0, "fee"] == 0
+        assert frame.loc[0, "tax"] == 0
+        assert {"symbol", "asset_class", "ticker"} <= set(frame.columns)
 
 
 class TestValidateData:
@@ -209,6 +262,13 @@ class TestValidateData:
     def test_rejects_an_unparseable_date_column(self):
         frame = self.valid_frame()
         frame["date"] = ["definitely not a date"]
+
+        with pytest.raises(ValueError, match="Invalid date format"):
+            validate_data(frame)
+
+    def test_rejects_dates_that_load_data_turned_into_nat(self):
+        frame = self.valid_frame()
+        frame["date"] = pd.to_datetime(["not a date"], errors="coerce")
 
         with pytest.raises(ValueError, match="Invalid date format"):
             validate_data(frame)

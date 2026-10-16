@@ -44,17 +44,20 @@ def format_large_number(value):
     return f"{value:,.0f}"
 
 
-def format_percentage(value):
-    """Convert a decimal percentage to a readable percentage."""
+def format_percentage(value, is_decimal=True):
+    """Format a percentage.
+
+    Yahoo Finance mixes units: most ratios are fractions (0.25 = 25%), but some
+    fields such as `dividendYield` are already percentages (0.41 = 0.41%). The
+    caller states which one it passes, because the value alone cannot tell.
+    """
     if value is None or pd.isna(value):
         return "N/A"
     try:
-        if abs(value) <= 1:
-            return f"{float(value) * 100:.2f}%"
-        else:
-            return f"{float(value):.2f}%"
+        value = float(value)
     except (ValueError, TypeError):
         return "N/A"
+    return f"{value * 100 if is_decimal else value:.2f}%"
 
 
 def get_portfolio_data():
@@ -96,11 +99,28 @@ def select_asset(assets):
 
     if manual_ticker_input.strip():
         manual_ticker = manual_ticker_input.strip().upper()
-        if not _validate_yahoo_ticker(manual_ticker):
+        if not _is_valid_ticker(manual_ticker):
             st.sidebar.warning("Invalid ticker symbol.")
-            return None, manual_ticker, asset_class
-        return manual_ticker, manual_ticker, asset_class
+            return None, manual_ticker, None
+        # The portfolio row's class does not apply to a typed ticker; the page
+        # derives it from Yahoo Finance's quote type instead.
+        return manual_ticker, manual_ticker, None
     return portfolio_ticker, selected_asset, asset_class
+
+
+# Cached so typing a ticker does not re-query Yahoo Finance on every rerun.
+_is_valid_ticker = st.cache_data(ttl=900, show_spinner=False)(_validate_yahoo_ticker)
+
+QUOTE_TYPE_CLASSES = {
+    "CRYPTOCURRENCY": "CRYPTO",
+    "ETF": "FUND",
+    "MUTUALFUND": "FUND",
+}
+
+
+def asset_class_from_info(info):
+    """Asset class for a ticker that is not in the portfolio."""
+    return QUOTE_TYPE_CLASSES.get(str(info.get("quoteType", "")).upper(), "STOCK")
 
 
 def select_period():
@@ -109,24 +129,25 @@ def select_period():
     return PERIODS[selected_period]
 
 
+# The fetchers below raise on failure: st.cache_data does not cache exceptions,
+# so a temporary Yahoo Finance outage is retried instead of cached for 15 minutes.
 @st.cache_data(ttl=900, show_spinner=False)
+def _fetch_ticker_info(ticker_symbol):
+    info = yf.Ticker(ticker_symbol).info
+    return info if isinstance(info, dict) else {}
+
+
 def load_ticker_info(ticker_symbol):
     """Load asset information from Yahoo Finance."""
     try:
-        info = yf.Ticker(ticker_symbol).info
-        return info if isinstance(info, dict) else {}
+        return _fetch_ticker_info(ticker_symbol)
     except Exception:
         return {}
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def load_price_history(ticker_symbol, period):
-    """Load and normalize historical price data."""
-    try:
-        history = yf.Ticker(ticker_symbol).history(period=period, auto_adjust=False)
-    except Exception:
-        return pd.DataFrame()
-
+def _fetch_price_history(ticker_symbol, period):
+    history = yf.Ticker(ticker_symbol).history(period=period, auto_adjust=False)
     if history.empty:
         return pd.DataFrame()
     history = history.reset_index()
@@ -135,13 +156,21 @@ def load_price_history(ticker_symbol, period):
     return history
 
 
-def get_display_name(info, asset_class):
-    """Return the best available display name."""
+def load_price_history(ticker_symbol, period):
+    """Load and normalize historical price data."""
+    try:
+        return _fetch_price_history(ticker_symbol, period)
+    except Exception:
+        return pd.DataFrame()
+
+
+def get_display_name(info, asset_class, fallback=None):
+    """Return the best available display name, or `fallback` when Yahoo has none."""
     if asset_class == "CRYPTO":
         name = info.get("name")
     else:
         name = info.get("longName")
-    return name
+    return name or info.get("shortName") or fallback
 
 
 def get_asset_type(ticker_symbol, asset_class):
@@ -233,7 +262,7 @@ def render_asset_overview(info, ticker_symbol, fallback_name):
     st.subheader("Company Overview")
     first_column, second_column = st.columns(2)
     with first_column:
-        st.write(f"**Company:** {get_display_name(info, fallback_name)}")
+        st.write(f"**Company:** {get_display_name(info, 'STOCK', fallback_name)}")
         st.write(f"**Ticker:** {ticker_symbol}")
         st.write(f"**Sector:** {info.get('sector', 'N/A')}")
         st.write(f"**Industry:** {info.get('industry', 'N/A')}")
@@ -316,10 +345,14 @@ def render_crypto_information(info, currency):
     render_metric_group(
         "Market Performance",
         {
-            "52-Week Change": format_percentage(info.get("fiftyTwoWeekChangePercent")),
+            "52-Week Change": format_percentage(
+                info.get("fiftyTwoWeekChangePercent"), is_decimal=False
+            ),
             "From 52-Week High": format_percentage(info.get("fiftyTwoWeekHighChangePercent")),
             "From 52-Week Low": format_percentage(info.get("fiftyTwoWeekLowChangePercent")),
-            "Volume / Market Cap": format_percentage(info.get("volume24HrMarketCapPercent")),
+            "Volume / Market Cap": format_percentage(
+                info.get("volume24HrMarketCapPercent"), is_decimal=False
+            ),
         },
     )
 
@@ -352,8 +385,8 @@ def render_fund_information(info, currency):
     """Render fund/ETF-specific information."""
     fund_inception_date = format_date_value(info.get("fundInceptionDate"))
 
-    left_column, right_column = st.columns(2)
     st.subheader("Fund Overview")
+    left_column, right_column = st.columns(2)
     with left_column:
         st.metric("Fund Type", info.get("legalType", "N/A"))
 
@@ -370,10 +403,10 @@ def render_fund_information(info, currency):
     st.subheader("Fund Costs & Valuation")
     left_column, right_column = st.columns(2)
     with left_column:
-        expense_ratio = info.get("netExpenseRatio")
-        if expense_ratio is not None:
-            expense_ratio = expense_ratio / 100
-        st.metric("Net Expense Ratio", format_percentage(expense_ratio))
+        st.metric(
+            "Net Expense Ratio",
+            format_percentage(info.get("netExpenseRatio"), is_decimal=False),
+        )
         st.metric("P/E Ratio", format_number(info.get("trailingPE")))
     with right_column:
         st.metric("50-Day Average", format_price(info.get("fiftyDayAverage"), currency))
@@ -384,11 +417,7 @@ def render_fund_information(info, currency):
     with left_column:
         st.metric(
             "52-Week Performance",
-            format_percentage(
-                info.get("fiftyTwoWeekChangePercent") / 100
-                if info.get("fiftyTwoWeekChangePercent") is not None
-                else None
-            ),
+            format_percentage(info.get("fiftyTwoWeekChangePercent"), is_decimal=False),
         )
         st.metric("From 52-Week High", format_percentage(info.get("fiftyTwoWeekHighChangePercent")))
     with right_column:
@@ -414,7 +443,7 @@ def render_stock_information(info, ticker_symbol, fallback_name):
         {
             "Market Cap": format_large_number(info.get("marketCap")),
             "P/E Ratio": format_number(info.get("trailingPE")),
-            "Dividend Yield": format_percentage(info.get("dividendYield")),
+            "Dividend Yield": format_percentage(info.get("dividendYield"), is_decimal=False),
             "Price/Book": format_number(info.get("priceToBook")),
         },
     )
@@ -439,7 +468,7 @@ def render_stock_information(info, ticker_symbol, fallback_name):
     render_metric_group(
         "Dividends",
         {
-            "Dividend Yield": format_percentage(info.get("dividendYield")),
+            "Dividend Yield": format_percentage(info.get("dividendYield"), is_decimal=False),
             "Annual Dividend": format_number(info.get("dividendRate")),
             "Payout Ratio": format_percentage(info.get("payoutRatio")),
             "Ex-Dividend Date": format_date_value(info.get("exDividendDate")),
@@ -472,7 +501,9 @@ def render_asset_analysis_page():
         st.error(f"No market data found for ticker `{ticker_symbol}`.")
         st.stop()
 
-    display_name = get_display_name(info, asset_class)
+    if asset_class is None:
+        asset_class = asset_class_from_info(info)
+    display_name = get_display_name(info, asset_class, fallback_name)
     currency = str(info.get("currency", "USD")).upper()
     metrics = calculate_price_metrics(history, one_year_history, info)
     st.header(display_name)

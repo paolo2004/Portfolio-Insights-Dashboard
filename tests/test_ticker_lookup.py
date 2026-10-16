@@ -62,7 +62,9 @@ class TestFormatYahooSymbol:
             ("SAP", "DE", "SAP.DE"),
             ("AIR", "FP", "AIR.PA"),
             ("VALE", "BR", "VALE.SA"),
-            ("600519", "CN", "600519.SS"),
+            ("600519", "CG", "600519.SS"),
+            ("SHOP", "CN", "SHOP.TO"),
+            ("SAP", "GY", "SAP.DE"),
         ],
     )
     def test_maps_exchange_codes_to_yahoo_suffixes(self, ticker, exch_code, expected):
@@ -161,11 +163,25 @@ class TestGetTickerFromIsin:
 
         assert get_ticker_from_isin("DE0007164600") == "SAP.DE"
 
-    def test_falls_back_to_the_unsuffixed_ticker(self, openfigi, monkeypatch):
+    def test_never_falls_back_to_the_unsuffixed_ticker(self, openfigi, monkeypatch):
+        # A bare "SAP" could be a different listing or company than the ISIN names.
         openfigi.response = FakeResponse(figi_payload(("SAP", "XET")))
         monkeypatch.setattr(ticker_lookup, "_validate_yahoo_ticker", lambda symbol: symbol == "SAP")
 
-        assert get_ticker_from_isin("DE0007164600") == "SAP"
+        assert get_ticker_from_isin("DE0007164600") is None
+
+    def test_unmapped_exchanges_are_skipped(self, openfigi, monkeypatch):
+        openfigi.response = FakeResponse(figi_payload(("SAP", "ZZ"), ("SAP", "GY")))
+        tried = []
+
+        def validate(symbol):
+            tried.append(symbol)
+            return True
+
+        monkeypatch.setattr(ticker_lookup, "_validate_yahoo_ticker", validate)
+
+        assert get_ticker_from_isin("DE0007164600") == "SAP.DE"
+        assert tried == ["SAP.DE"]
 
     def test_returns_none_when_no_candidate_is_valid(self, openfigi, monkeypatch):
         openfigi.response = FakeResponse(figi_payload(("SAP", "XET")))
@@ -209,6 +225,14 @@ class TestGetTickerFromIsin:
         )
 
         assert get_ticker_from_isin("DE0007164600") is None
+
+    def test_failures_are_not_cached(self, openfigi, monkeypatch):
+        monkeypatch.setattr(ticker_lookup, "_validate_yahoo_ticker", lambda symbol: True)
+        openfigi.response = requests.exceptions.ConnectionError("no route to host")
+        assert get_ticker_from_isin("DE0007164600") is None
+
+        openfigi.response = FakeResponse(figi_payload(("SAP", "XET")))
+        assert get_ticker_from_isin("DE0007164600") == "SAP.DE"
 
     def test_repeated_lookups_are_cached(self, openfigi, monkeypatch):
         openfigi.response = FakeResponse(figi_payload(("SAP", "XET")))

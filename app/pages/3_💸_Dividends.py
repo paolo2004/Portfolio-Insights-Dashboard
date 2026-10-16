@@ -46,15 +46,16 @@ with header_right:
             max_value=max_date.date(),
         )
         if len(selected_dates) != 2:
-            st.warning("Please select a start and a end date")
+            st.warning("Please select a start and an end date")
             st.stop()
-        start_date, end_date = selected_dates
-        filtered_dividends = dividends[
-            (dividends["date"].dt.date >= start_date) & (dividends["date"].dt.date <= end_date)
-        ].copy()
 
-if period == "Current year":
-    filtered_dividends = dividends[dividends["date"].dt.year == max_date.year].copy()
+if period == "Custom range":
+    start_date, end_date = selected_dates
+    filtered_dividends = dividends[
+        (dividends["date"].dt.date >= start_date) & (dividends["date"].dt.date <= end_date)
+    ].copy()
+elif period == "Current year":
+    filtered_dividends = dividends[dividends["date"].dt.year == pd.Timestamp.today().year].copy()
 elif period == "Last 12 months":
     start_date = max_date - pd.DateOffset(months=12)
     filtered_dividends = dividends[dividends["date"] >= start_date].copy()

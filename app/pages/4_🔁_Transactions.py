@@ -50,6 +50,8 @@ with filter_col3:
         min_value=min_date,
         max_value=max_date,
     )
+    if not (isinstance(selected_dates, tuple) and len(selected_dates) == 2):
+        st.caption("Select an end date to apply the date filter.")
 
 filtered_df = df.copy()
 if selected_types:
@@ -101,13 +103,36 @@ col5.metric(
 # ---------------------------------------------------------
 # TRANSACTIONS OVER TIME
 # ---------------------------------------------------------
+TYPE_GROUPS = {
+    "BUY": "Buy",
+    "SELL": "Sell",
+    "DIVIDEND": "Dividend",
+    "INTEREST_PAYMENT": "Interest",
+    "TRANSFER_INBOUND": "Deposit",
+    "TRANSFER_INSTANT_INBOUND": "Deposit",
+    "CUSTOMER_INPAYMENT": "Deposit",
+    "TRANSFER_INSTANT_OUTBOUND": "Withdrawal",
+    "CARD_TRANSACTION": "Card payment",
+    "CUSTOMER_INPAYMENT_REVERSAL": "Other",
+    "TAX_OPTIMIZATION": "Other",
+}
+GROUP_ORDER = ["Buy", "Sell", "Dividend", "Interest", "Deposit", "Withdrawal", "Card payment", "Other"]
+GROUP_COLORS = {g: CATEGORICAL[i % len(CATEGORICAL)] for i, g in enumerate(GROUP_ORDER)}
+
 left_column, right_column = st.columns(2)
 with left_column:
     with st.container(border=True):
         st.markdown("### Transactions over time")
         st.caption("Monthly transaction count by type.")
 
-        transaction_chart = filtered_df.groupby(["month", "type"], as_index=False).size()
+        hide_cards = st.toggle("Hide card payments", value=False)
+
+        chart_df = filtered_df.assign(
+            type_group=filtered_df["type"].map(TYPE_GROUPS).fillna("Other")
+        )
+        if hide_cards:
+            chart_df = chart_df[chart_df["type_group"] != "Card payment"]
+        transaction_chart = chart_df.groupby(["month", "type_group"], as_index=False).size()
         if transaction_chart.empty:
             st.info("No transactions for the selected filters.")
         else:
@@ -115,12 +140,19 @@ with left_column:
                 transaction_chart,
                 x="month",
                 y="size",
-                color="type",
+                color="type_group",
+                category_orders={"type_group": GROUP_ORDER},
                 labels={
                     "month": "",
                     "size": "Transactions",
                     "type": "",
                 },
+            )
+            figure.update_traces(hovertemplate="%{fullData.name}: %{y}<extra></extra>")
+            figure.update_layout(
+                hovermode="x unified",  # one tooltip per month listing all types
+                bargap=0.15,
+                legend=dict(orientation="h", yanchor="top", y=-0.12, x=0, title=None),
             )
             show_chart(figure)
 
@@ -174,6 +206,9 @@ with breakdown_col1:
             hole=0.68,
         )
         figure.update_traces(marker=dict(line=dict(color="#10151d", width=2)))
+        figure.update_layout(
+                        legend=dict(orientation="h", yanchor="top", y=-0.12, x=0, title=None),
+                    )
         show_chart(figure)
 
 with breakdown_col2:

@@ -55,6 +55,19 @@ def test_holdings_follow_buys_and_sells():
     assert holdings["BBB"].tolist() == [0.0, 0.0, 1.0, 1.0]
 
 
+def test_holdings_ignore_sales_beyond_what_was_bought():
+    trades = make_trades(
+        [
+            ("2024-01-01", "SELL", "AAA", 5.0, 500.0, 0.0),
+            ("2024-01-02", "BUY", "AAA", 2.0, -200.0, 0.0),
+        ]
+    )
+    holdings = holdings_timeline(trades, pd.date_range("2024-01-01", "2024-01-02"))
+
+    # The later buy must count in full, not be absorbed by the oversold shares.
+    assert holdings["AAA"].tolist() == [0.0, 2.0]
+
+
 def test_market_value_forward_fills_prices_over_weekends():
     days = pd.date_range("2024-01-01", "2024-01-04")
     holdings = holdings_timeline(TRADES, days)

@@ -11,7 +11,8 @@ df = st.session_state["df"].copy()
 validate_data(df)
 
 expenses = df[df["type"] == "CARD_TRANSACTION"].copy()
-expenses["amount"] = expenses["amount"].abs()  # Convert to positive values for display
+# Flip the sign so spending is positive; refunds stay negative and reduce the totals.
+expenses["amount"] = -expenses["amount"]
 
 if expenses.empty:
     st.info("No expense transactions found in the uploaded data.")

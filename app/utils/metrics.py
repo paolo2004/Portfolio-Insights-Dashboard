@@ -8,7 +8,7 @@ from utils.analysis import load_ticker_info
 def get_trades_transactions(df):
     trades_transactions = df[df["type"].isin(["BUY", "SELL"])].copy()
     if trades_transactions.empty:
-        st.info("No buy transactions found. Allocation cannot be calculated.")
+        st.info("No buy or sell transactions found. Allocation cannot be calculated.")
         st.stop()
     else:
         return trades_transactions
@@ -52,17 +52,19 @@ def get_current_prices(tickers):
         if not ticker:
             continue
 
+        # Reset per ticker so a missing price never inherits the previous ticker's.
+        price_eur = np.nan
         try:
             yahoo_ticker = yf.Ticker(ticker)
             history = yahoo_ticker.history(period="5d", interval="15m", auto_adjust=False)
-            if not history.empty:
-                price = history["Close"].dropna().iloc[-1]
-
-            currency = yahoo_ticker.fast_info.get("currency")
-            if currency == "USD":
-                price_eur = convert_usd_to_eur(price, exchange_rate)
-            elif currency == "EUR":
-                price_eur = float(price)
+            closes = history["Close"].dropna() if not history.empty else pd.Series(dtype=float)
+            if not closes.empty:
+                price = closes.iloc[-1]
+                currency = yahoo_ticker.fast_info.get("currency")
+                if currency == "USD":
+                    price_eur = convert_usd_to_eur(price, exchange_rate)
+                elif currency == "EUR":
+                    price_eur = float(price)
 
             prices[ticker] = price_eur
         except Exception:

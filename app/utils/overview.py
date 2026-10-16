@@ -79,9 +79,17 @@ def holdings_timeline(trades, days):
 
     signed_shares = trades["shares"].abs().where(trades["type"] == "BUY", -trades["shares"].abs())
     daily = signed_shares.groupby([trades["date"].dt.normalize(), trades["ticker"]]).sum()
-    holdings = daily.unstack(fill_value=0).reindex(days, fill_value=0).cumsum()
+    changes = daily.unstack(fill_value=0).reindex(days, fill_value=0)
+
     # Selling more than the export shows as bought must not create short positions.
-    return holdings.clip(lower=0)
+    # Clip the running total at every step (not once at the end), so a later buy
+    # starts from zero, the same way `calculate_positions` ignores the excess sale.
+    held = np.zeros(changes.shape[1])
+    rows = []
+    for change in changes.to_numpy():
+        held = np.maximum(held + change, 0)
+        rows.append(held)
+    return pd.DataFrame(rows, index=changes.index, columns=changes.columns)
 
 
 def market_value_timeline(holdings, prices):

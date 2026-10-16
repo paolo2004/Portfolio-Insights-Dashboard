@@ -1,4 +1,5 @@
 import html
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -138,13 +139,13 @@ months_in_period = max((latest_date - start).days / 30.44, 1)
 asset_classes = open_positions["asset_class"].nunique()
 
 # ---------------------------------------------------------------- KPIs
-if period_dividends > 0 and cost_basis > 0:
+if trailing_dividends > 0 and cost_basis > 0:
     dividend_context, dividend_tone = (
         f"+{trailing_dividends / cost_basis:.1%} yield on cost (12m)",
         "positive",
     )
 else:
-    dividend_context, dividend_tone = "No dividends in this period", ""
+    dividend_context, dividend_tone = "No dividends in the last 12 months", ""
 
 if unpriced_positions == len(open_positions):
     value_context, value_tone = "No prices available, valued at cost", ""
