@@ -1,6 +1,6 @@
-# Trade-Republic-Dashboard
+# Portfolio-Insights-Dashboard
 
-A local Streamlit dashboard that imports, analyses and visualises your Trade Republic export files. Your transaction data stays on your own machine.
+A local Streamlit dashboard that imports, analyses and visualises your Trade Republic export file. Your transaction data stays on your own machine.
 
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Streamlit](https://img.shields.io/badge/streamlit-1.58-red)
