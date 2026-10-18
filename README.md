@@ -1,207 +1,172 @@
-# Portfolio-Insights-Dashboard
+<div align="center">
 
-A local Streamlit dashboard that imports, analyses and visualises your Trade Republic export file. Your transaction data stays on your own machine.
+<img src="assets/logo.webp" alt="Portfolio Insights Dashboard logo" width="96">
 
+# Portfolio Insights Dashboard
+
+**See where your money is, what it earns and what it costs, all in one place.**
+
+A free dashboard that runs on your own computer. Give it the transaction export from your
+Trade Republic account, and it turns hundreds of rows into clear charts and plain numbers.
+
+[![CI](https://github.com/paolo2004/portfolio-insights-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/paolo2004/portfolio-insights-dashboard/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Streamlit](https://img.shields.io/badge/streamlit-1.58-red)
 
-## Quick start
+</div>
+
+## Why
+
+Your broker app shows what your account is worth today. Your export file holds much more: how much
+you really put in, which sales made money, what you earned in dividends and paid in fees. It's just
+hard to read. This dashboard does the maths for you, and it is:
+
+- **Private**: your file never leaves your computer. No account, no login, no tracking.
+- **Honest**: if a number can't be worked out properly, it tells you instead of guessing.
+- **Simple**: every page answers one question. No finance knowledge needed.
+
+## Get started
+
+You need **Python 3.12**. Then run:
 
 ```powershell
+git clone https://github.com/paolo2004/portfolio-insights-dashboard.git
+cd portfolio-insights-dashboard
 python -m venv venv
-.\venv\Scripts\Activate.ps1
+.\venv\Scripts\Activate.ps1        # macOS / Linux: source venv/bin/activate
 pip install -r requirements.txt
 streamlit run app/main.py
 ```
 
-The dashboard opens at <http://localhost:8501>, straight onto the **Overview** page. It loads a demo portfolio automatically, so you can explore every page before importing anything of your own.
+The dashboard opens at <http://localhost:8501> with a **demo portfolio**, so you can look around
+right away.
 
-To use your own data, export your transactions from the Trade Republic app as CSV, then click **Import CSV** on the Overview page or **Replace file** in the sidebar's *Data source* card. The same dialog lets you switch back to the demo portfolio.
+**To use your own data**, export your transactions from the Trade Republic app as a CSV file, then
+click **Import CSV** on the Overview page (or **Replace file** in the sidebar). Export your **full
+history from the day you opened the account**, otherwise numbers like your cash balance will be off.
 
-## Features
+## Pages
 
-Navigation is a sidebar built with `st.navigation`. The *Data source* card at the top of the sidebar always shows which file is loaded and how many rows it has.
-
-| Page | What it shows |
+| Page | Answers |
 | --- | --- |
-| **Overview** | KPI cards (portfolio value with unrealised P/L, cash, dividends with 12-month yield on cost, assets held, transactions per month), an invested capital vs market value chart, an allocation donut by asset class including cash, and recent activity. A 1M / 6M / 1Y / All selector sets the period. |
-| **Asset allocation** | Invested capital by asset class, equity position, crypto position, country and sector, plus net capital invested per trading day |
-| **Dividends** | Net and gross dividend income, taxes paid, effective tax rate, top-paying assets and income distribution |
-| **Transactions** | Filterable transaction history with monthly activity, cash flow, type and asset class breakdowns, and fee/tax totals |
-| **Expenses** | Card spending over time, top merchants, and fee/tax totals |
-| **Asset analysis** | Market data and fundamentals for any holding, with separate views for stocks, funds/ETFs and crypto |
+| **Overview** | *How am I doing?* Portfolio value, cash, dividends, assets held and realised profit, plus a chart of money put in vs. what it's worth now. |
+| **Asset allocation** | *Where is my money?* Split by type, single stock, crypto, country and industry. |
+| **Dividends** | *What do my investments pay me?* Income before and after tax, top payers, month by month. |
+| **Transactions** | *What did I do, and when?* Full filterable history, money in and out, fees and taxes. |
+| **Realised gains** | *Did my sales make money?* Every sale with buy and sell price, profit after tax and holding time. |
+| **Expenses** | *Where does my card money go?* Card spending over time and top shops. |
+| **Asset analysis** | *What is this thing I own?* Prices and key facts for any stock, fund or coin. |
 
-### How the numbers are calculated
+## A few terms
 
-Positions use **average-cost accounting**. A buy adds shares and cost (trade amount plus fees and taxes). A sell reduces the open share count and removes a proportional share of the cost basis, and the difference between net proceeds and removed cost basis is booked as realised P/L. A sale larger than the holding only removes the shares on hand.
-
-The Overview builds on those positions:
-
-- **Invested capital** is the net cash put into trades: buys count with their fees and taxes, and sales count with what came back after fees and taxes. Every page uses this one definition (`net_invested` in `utils/overview.py`).
-- **Cash** is the sum of every cash movement in the export (`amount + fee + tax`). This only works when the export starts at account opening. A negative result is flagged as a probably partial export.
-- **Portfolio value** is the market value of the open positions plus any positive cash. Each position is valued at its latest close in EUR. If there is no price, it falls back to its cost basis, and the KPI card says how many positions were valued at cost.
-- **Unrealised P/L** is that market value minus the remaining cost basis.
-- **The market value line** on the invested capital chart appears only when every held asset has price history. A partial line would sit below the invested line and look like a loss.
-
-Sign conventions follow the Trade Republic export: `amount` is negative for buys and positive for sells, and `fee` and `tax` are negative.
-
-## Data sources
-
-**Local files: your transaction data.** The CSV export from Trade Republic. An imported file is held in the Streamlit session, in memory only. It is never written to disk or sent anywhere. The loader can also read Excel files (`.xls`/`.xlsx`), but the import dialog currently accepts only CSV.
-
-**External APIs — market data only.** The dashboard enriches your holdings with public market data:
-
-| Service | What is sent | What comes back |
-| --- | --- | --- |
-| [OpenFIGI](https://www.openfigi.com/api) | The ISIN of each security you hold | The matching ticker symbol |
-| [Yahoo Finance](https://finance.yahoo.com) (via `yfinance`) | Ticker symbols | Prices, company data, sectors, countries, financial statements, USD/EUR rate |
-
-**This means your ISINs and ticker symbols leave your machine.** Amounts, share counts, dates, names and IBANs never do. Every lookup fails soft, so the app still works without network access: pages render, imported figures are correct, and anything price-derived is reported as unavailable.
-
-Not supported, by design:
-
-- No Trade Republic login automation and no credential storage
-- No official or unofficial Trade Republic API access
-- No automatic portfolio synchronisation
-- No analytics, tracking or telemetry
-
-## Privacy and security
-
-| Question | Answer |
+| Term | Meaning |
 | --- | --- |
-| What data is sensitive? | Securities, transactions, IBAN, name and other personal financial data |
-| Where is it stored? | In memory for the current browser session; optionally your own copies in the git-ignored `data/` folder |
-| What leaves the machine? | ISINs and ticker symbols, sent to OpenFIGI and Yahoo Finance for market data |
-| Who has access? | Only the local user |
-| What must never happen? | Financial data or credentials ending up on GitHub |
+| **Invested capital** | Money you spent on buying, minus money you got back from selling. |
+| **Cost basis** | What you paid for the shares you still own, fees included. |
+| **Unrealised P/L** | Profit or loss "on paper" on things you still own. |
+| **Realised P/L** | Profit or loss you locked in by selling. |
+| **Dividend** | A payment some companies and funds make to their shareholders. |
+| **Yield on cost** | Last 12 months of dividends as a percentage of what you paid. |
+| **ISIN / ticker** | A security's ID (`US0378331005`) and its short market name (`AAPL`). |
 
-The importer drops the most sensitive columns (`counterparty_iban`, `payment_reference`, `account_type`, `mcc_code`) on load, so they never reach a chart or a table. `.gitignore` excludes `data/`, all `*.csv` and `*.xlsx` files, and `.env`, with an explicit exception for the demo portfolio.
+### How profit on a sale is worked out
 
-## Architecture
+The dashboard uses **FIFO (first in, first out)**: the shares you bought first count as sold first.
+This is also how German tax rules work.
 
-```text
-Trade Republic CSV  (or the bundled demo portfolio)
-          |
-          v
-   Import dialog / demo loader  app/utils/data_source.py
-          |
-          v
-   Import & validation          app/utils/import_data.py
-          |
-          +---> ISIN -> ticker  app/utils/ticker_lookup.py  --> OpenFIGI
-          |
-          v
-   pandas DataFrame (st.session_state)
-          |
-          +---> positions, allocation      app/utils/metrics.py   --> Yahoo Finance
-          +---> overview timelines, cash   app/utils/overview.py  --> Yahoo Finance
-          +---> market data, formatting    app/utils/analysis.py  --> Yahoo Finance
-          |
-          v
-   Navigation (st.navigation)    app/main.py
-          |
-          v
-   Streamlit pages               app/pages/
-          |
-          v
-   Shared styling & charts       app/utils/styling.py, app/utils/chart.py
-```
+> You buy 10 shares at €100, later 10 more at €120, then sell 15 at €130 (€1,950).
+> Those 15 shares are the 10 from the first buy and 5 from the second, so they cost you €1,600.
+> **Profit: €350** before tax. You still own 5 shares that cost €600.
 
-Data processing lives in `app/utils/` and is kept separate from the pages, so analysis functions can be tested without a running Streamlit server.
+Fees are added to the cost when you buy and taken off what you receive when you sell.
 
-## Project structure
+## Privacy
 
-```text
-app/
-  main.py              Entry point: sidebar navigation, demo data, data source card
-  pages/               One file per dashboard page, registered in main.py
-  utils/
-    data_source.py     Demo portfolio loading, import dialog, sidebar source card
-    import_data.py     File loading, normalisation and validation
-    ticker_lookup.py   ISIN -> Yahoo Finance ticker resolution
-    metrics.py         Position accounting, allocation, currency conversion
-    overview.py        Overview calculations: invested capital, cash, holdings and
-                       market value timelines, allocation by asset class
-    analysis.py        Market data, formatting, asset analysis page
-    chart.py           Plotly theme and validated colour palette
-    styling.py         Page setup: config, stylesheets, chart theme
-  styles/
-    tokens.css         Design tokens: colours, radii, spacing
-    main.css           Component styling
-.streamlit/config.toml Dark theme matching the design tokens
-assets/                Logo and the demo portfolio
-data/                  Your own exports (git-ignored)
-tests/                 Test suite
-```
+- **Stays on your computer:** amounts, share counts, dates, your name and bank details. Imported
+  files are kept in memory only, never saved or uploaded. Bank account numbers and payment
+  references are removed on import.
+- **Sent out:** only the IDs of the securities you hold (ISINs and tickers), to
+  [OpenFIGI](https://www.openfigi.com/api) and [Yahoo Finance](https://finance.yahoo.com), to get
+  prices. Without internet everything still works, just without live prices.
+- **Never:** no Trade Republic login, no connection to Trade Republic, no tracking.
 
-### Styling
+Your exports are git-ignored so they can't end up on GitHub. See [SECURITY.md](SECURITY.md) for
+more, and for how to report a problem.
 
-Every page starts with a single call:
+## Good to know
 
-```python
-from utils.styling import setup_page
+- Only euros and US dollars are converted. Other currencies are counted at what you paid.
+- The import dialog accepts CSV only for now.
+- Yahoo Finance is unofficial, so now and then a security shows no market data.
+- This is not financial or tax advice. For your tax return, use your broker's official documents.
 
-setup_page("Overview", ":material/dashboard:")
-```
-
-Pages are registered in `app/main.py` with a title, a Material icon and a URL path. A new page needs an entry in the `PAGES` list there as well as a file in `app/pages/`.
-
-That sets the page config, injects the stylesheets and registers the Plotly theme, so pages stay visually consistent without repeating boilerplate. Colours are defined once as CSS custom properties in `styles/tokens.css` and as Python constants in `utils/chart.py`.
-
-The categorical chart palette is checked for colourblind separation against the dashboard's own surface colour. Because every slice of a pie chart is compared against every other, only the first three slots are safe in that form — which is why most breakdowns are sorted bar charts rather than pies.
-
-## Testing
-
-```powershell
-pytest
-```
-
-188 tests covering file import and validation, ISIN lookup, the average-cost position accounting, allocation breakdowns, the Overview calculations (invested capital, cash balance, holdings and market value timelines, period windows), and the display formatters.
-
-The suite runs **fully offline**: every OpenFIGI and Yahoo Finance call is mocked, and `tests/conftest.py` blocks socket creation so a test that forgets to mock one fails loudly instead of quietly hitting the network.
-
-Two fixtures are worth knowing about if you add tests:
-
-- `st.stop()` is patched to raise. Outside a Streamlit runtime it only logs a warning and returns, so guarded functions would otherwise keep running past the guard.
-- Streamlit's caches are cleared between tests, so mocked lookups are not served stale results.
-
-## Development
+## For developers
 
 ```powershell
 pip install -r requirements-dev.txt
-
-pytest              # tests
+pytest              # 216 tests, fully offline (network calls are mocked and blocked)
 ruff check .        # lint
 ruff format .       # format
 bandit -r app       # security scan
 ```
 
-`pyproject.toml` puts both the repository root and `app/` on the Python path, because the app modules import each other as `utils.<module>`.
+CI runs all four on every push and pull request to `main`.
 
-## Tech stack
+### Project structure
 
-- **Python 3.12**
-- **Streamlit** — dashboard UI
-- **pandas** / **NumPy** — data processing
-- **Plotly** — charts
-- **yfinance** / **requests** — market data
-- **openpyxl** — Excel import
-- **pytest**, **ruff**, **bandit** — tests, linting, security scanning
+All calculations live in `app/utils/`, separate from the pages, so they can be tested without
+Streamlit.
 
-## CI
+```text
+portfolio-insights-dashboard/
+├── app/
+│   ├── main.py                  Entry point: sidebar navigation, demo data, data source card
+│   ├── pages/                   One file per page
+│   │   ├── 1_📊_Overview.py
+│   │   ├── 2_🥧_Allocation.py
+│   │   ├── 3_💸_Dividends.py
+│   │   ├── 4_🔁_Transactions.py
+│   │   ├── 5_💳_Expenses.py
+│   │   ├── 6_📈_Asset_Analysis.py
+│   │   └── 7_💰_Realised_Gains.py
+│   ├── utils/
+│   │   ├── data_source.py       Demo portfolio, import dialog, sidebar data source card
+│   │   ├── import_data.py       Loads, cleans and validates the export
+│   │   ├── ticker_lookup.py     Turns ISINs into tickers via OpenFIGI
+│   │   ├── metrics.py           FIFO positions, realised trades, allocation, currency conversion
+│   │   ├── overview.py          Invested capital, cash and value timelines
+│   │   ├── analysis.py          Market data, number formatting, asset analysis views
+│   │   ├── chart.py             Chart theme and colour palette
+│   │   └── styling.py           Shared page setup: config, stylesheets, chart theme
+│   └── styles/
+│       ├── tokens.css           Design tokens: colours, radii, spacing
+│       └── main.css             Component styling
+├── assets/
+│   ├── demo_transactions.csv    Demo portfolio loaded on start
+│   └── logo.webp
+├── data/                        Your own exports (git-ignored)
+├── tests/                       216 offline tests
+├── .github/workflows/ci.yml     Lint, format, test and security checks
+├── .streamlit/config.toml       Dark theme matching the design tokens
+├── pyproject.toml               Ruff and pytest settings
+├── requirements.txt             App dependencies
+├── requirements-dev.txt         Plus test and lint tools
+├── REQUIREMENTS.md              Project requirements (German)
+└── SECURITY.md                  Security policy
+```
 
-`.github/workflows/ci.yml` runs on pushes and pull requests to `main` or `master`, and on manual dispatch. It installs dependencies, checks formatting and linting with Ruff, runs Pytest, and scans `app/` with Bandit.
+**Adding a page.** Create a file in `app/pages/` that starts with
+`setup_page("Title", ":material/icon:")` from `utils.styling`, then add it to the `PAGES` list in
+`app/main.py`.
 
-No deployment stage is configured: the dashboard is designed to run locally, which keeps financial data off third-party servers. A CD stage could be added later for Docker or a self-hosted deployment.
+**Import format.** The required columns are `date`, `type`, `name`, `shares`, `amount` and
+`currency`. See `assets/demo_transactions.csv` for the full layout.
 
-## Known limitations
+**Built with** Python 3.12, Streamlit, pandas, NumPy, Plotly, yfinance, pytest, Ruff and Bandit.
+Requirements are documented in German in [REQUIREMENTS.md](REQUIREMENTS.md).
 
-- The cash balance is only correct for an export that starts at account opening. A partial export gives a wrong, possibly negative, figure.
-- Currency conversion only handles USD and EUR. Holdings in other currencies show no price: they are valued at cost, and the market value line is hidden.
-- The import dialog accepts only CSV, even though the loader can read Excel.
-- Yahoo Finance is an unofficial data source; tickers that cannot be resolved from an ISIN simply show no market data.
-- ISIN lookups use a 15-second timeout each, so the first import without a working network connection is slow before it gives up.
+---
 
-## Requirements
-
-Functional and non-functional requirements are documented in German in [REQUIREMENTS.md](REQUIREMENTS.md).
+<div align="center">
+<sub>An independent project, not affiliated with or endorsed by Trade Republic.</sub>
+</div>

@@ -5,6 +5,7 @@ data/*
 !data/.gitkeep
 *.csv
 !assets/demo_transactions.csv
+*.xls
 *.xlsx
 *.db
 __pycache__/
