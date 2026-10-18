@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="assets/logo.webp" alt="Portfolio Insights Dashboard logo" width="96">
-
 # Portfolio Insights Dashboard
 
 **See where your money is, what it earns and what it costs, all in one place.**
@@ -47,27 +45,27 @@ history from the day you opened the account**, otherwise numbers like your cash 
 
 ## Pages
 
-| Page | Answers |
-| --- | --- |
-| **Overview** | *How am I doing?* Portfolio value, cash, dividends, assets held and realised profit, plus a chart of money put in vs. what it's worth now. |
-| **Asset allocation** | *Where is my money?* Split by type, single stock, crypto, country and industry. |
-| **Dividends** | *What do my investments pay me?* Income before and after tax, top payers, month by month. |
-| **Transactions** | *What did I do, and when?* Full filterable history, money in and out, fees and taxes. |
-| **Realised gains** | *Did my sales make money?* Every sale with buy and sell price, profit after tax and holding time. |
-| **Expenses** | *Where does my card money go?* Card spending over time and top shops. |
-| **Asset analysis** | *What is this thing I own?* Prices and key facts for any stock, fund or coin. |
+| Page                 | Answers                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Overview**         | _How am I doing?_ Portfolio value, cash, dividends, assets held and realised profit, plus a chart of money put in vs. what it's worth now. |
+| **Asset allocation** | _Where is my money?_ Split by type, single stock, crypto, country and industry.                                                            |
+| **Dividends**        | _What do my investments pay me?_ Income before and after tax, top payers, month by month.                                                  |
+| **Transactions**     | _What did I do, and when?_ Full filterable history, money in and out, fees and taxes.                                                      |
+| **Realised gains**   | _Did my sales make money?_ Every sale with buy and sell price, profit after tax and holding time.                                          |
+| **Expenses**         | _Where does my card money go?_ Card spending over time and top shops.                                                                      |
+| **Asset analysis**   | _What is this thing I own?_ Prices and key facts for any stock, fund or coin.                                                              |
 
 ## A few terms
 
-| Term | Meaning |
-| --- | --- |
-| **Invested capital** | Money you spent on buying, minus money you got back from selling. |
-| **Cost basis** | What you paid for the shares you still own, fees included. |
-| **Unrealised P/L** | Profit or loss "on paper" on things you still own. |
-| **Realised P/L** | Profit or loss you locked in by selling. |
-| **Dividend** | A payment some companies and funds make to their shareholders. |
-| **Yield on cost** | Last 12 months of dividends as a percentage of what you paid. |
-| **ISIN / ticker** | A security's ID (`US0378331005`) and its short market name (`AAPL`). |
+| Term                 | Meaning                                                              |
+| -------------------- | -------------------------------------------------------------------- |
+| **Invested capital** | Money you spent on buying, minus money you got back from selling.    |
+| **Cost basis**       | What you paid for the shares you still own, fees included.           |
+| **Unrealised P/L**   | Profit or loss "on paper" on things you still own.                   |
+| **Realised P/L**     | Profit or loss you locked in by selling.                             |
+| **Dividend**         | A payment some companies and funds make to their shareholders.       |
+| **Yield on cost**    | Last 12 months of dividends as a percentage of what you paid.        |
+| **ISIN / ticker**    | A security's ID (`US0378331005`) and its short market name (`AAPL`). |
 
 ### How profit on a sale is worked out
 
